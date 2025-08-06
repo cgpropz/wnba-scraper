@@ -294,18 +294,37 @@ else:
     print("Debug: Final big_df sample:\n", big_df.head())
 
     print("📊 Uploading to Google Sheets...")
-    try:
-        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        credentials = ServiceAccountCredentials.from_json_keyfile_name("auth.json", scopes)
-        gs = gspread.authorize(credentials)
-        sheet = gs.open_by_url("https://docs.google.com/spreadsheets/d/14sXJ4m6x6Dtl1vh4QsHv1SOpvlLQCG0lNRj7RaEvdSg")
-        ws = sheet.worksheet("Sports_Data")
-        ws.clear()
-        ws.append_row(big_df.columns.tolist())
-        ws.append_rows(big_df.values.tolist())
-        print(f"✅ Uploaded {len(big_df)} rows to Google Sheets")
-    except Exception as e:
-        print(f"Failed to upload to Google Sheets: {e}")
+    print("📊 Uploading to Google Sheets...")
+try:
+    # Load credentials from environment variable
+    import json
+    import os
+    from io import StringIO
+
+    credentials_json = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
+    with open('auth.json', 'w') as f:
+        f.write(credentials_json)
+
+    # Authorize with the temporary auth.json
+    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+    credentials = ServiceAccountCredentials.from_json_keyfile_name("auth.json", scopes)
+    gs = gspread.authorize(credentials)
+
+    # Open the spreadsheet and worksheet
+    sheet = gs.open_by_url("https://docs.google.com/spreadsheets/d/14sXJ4m6x6Dtl1vh4QsHv1SOpvlLQCG0lNRj7RaEvdSg")
+    ws = sheet.worksheet("Sports_Data")
+
+    # Clear and upload data
+    ws.clear()
+    ws.append_row(big_df.columns.tolist())
+    ws.append_rows(big_df.values.tolist())
+    print(f"✅ Uploaded {len(big_df)} rows to Google Sheets")
+
+    # Clean up the temporary auth.json file
+    os.remove('auth.json')
+
+except Exception as e:
+    print(f"❌ Failed to upload to Google Sheets: {type(e).__name__} - {e}")
 
 # Cleanup
 print("🧹 Cleaning up...")
@@ -316,3 +335,4 @@ except Exception as e:
     print(f"Warning: Driver close failed: {e}")
 
 print("🎉 Scraping complete!")
+
