@@ -20,8 +20,11 @@ jobs:
     - name: Install Chrome and ChromeDriver
       run: |
         sudo apt-get update
-        sudo apt-get install -y chromium-browser chromium-chromedriver
-        sudo ln -sf /usr/lib/chromium-browser/chromedriver /usr/bin/chromedriver
+        for i in {1..3}; do
+          sudo apt-get install -y chromium-browser chromium-chromedriver && break || sleep 15
+        done
+        sudo ln -s /usr/lib/chromium-browser/chromedriver /usr/bin/chromedriver || true
+        echo "ChromeDriver version: $(chromedriver --version || echo 'Not installed')"
 
     - name: Install Python dependencies
       run: |
@@ -39,3 +42,8 @@ jobs:
 
     - name: Clean up credentials
       run: rm auth.json
+
+    - name: Check for errors in script output
+      if: failure()
+      run: |
+        echo "Script failed. Check the log above for details."
