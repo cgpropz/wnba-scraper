@@ -49,13 +49,15 @@ jobs:
       env:
         GOOGLE_SHEETS_CREDENTIALS_PP: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_PP }}
       run: |
-        echo "$GOOGLE_SHEETS_CREDENTIALS_PP" > auth.json
+        echo "$GOOGLE_SHEETS_CREDENTIALS_PP" > creds.json
 
     - name: Run wnba-pp-odds scraper
+      env:
+        GOOGLE_SHEETS_CREDENTIALS_PP: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_PP }}
       run: python wnba-pp-odds.py
 
     - name: Clean up wnba-pp-odds credentials
-      run: rm auth.json
+      run: rm creds.json
 
     # ---------- Error Check ----------
     - name: Check for errors in script output
