@@ -4,6 +4,7 @@ import gspread
 from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 import logging
+import json
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -59,8 +60,9 @@ def update_google_sheet(df):
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]
-        logging.debug("Loading credentials from creds.json")
-        creds = Credentials.from_service_account_file('creds.json', scopes=scopes)
+        logging.debug("Loading credentials from environment variable")
+        creds_json = json.loads('''${{ secrets.GOOGLE_SHEETS_CREDENTIALS_PP }}''')
+        creds = Credentials.from_service_account_info(creds_json, scopes=scopes)
         logging.debug(f"Credentials loaded, service account: {creds.service_account_email}")
         client = gspread.authorize(creds)
 
