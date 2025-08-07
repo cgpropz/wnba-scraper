@@ -60,3 +60,7 @@ jobs:
     # ---------- Error Check ----------
     - name: Check for errors in script output
       if: failure()
+      run: |
+        echo "One or more scripts failed. Check the logs above for details."
+        ls -la
+        cat auth.json || echo "auth.json not found"
