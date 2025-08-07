@@ -31,7 +31,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install selenium webdriver_manager pandas gspread oauth2client lxml
 
-    - name: Set up Google Sheets credentials
+    # ---------- First Script ----------
+    - name: Set up credentials for WNBA_scraper.py
       env:
         GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
       run: |
@@ -40,10 +41,22 @@ jobs:
     - name: Run WNBA scraper
       run: python WNBA_scraper.py
 
-    - name: Clean up credentials
+    - name: Clean up WNBA_scraper credentials
       run: rm auth.json
 
+    # ---------- Second Script ----------
+    - name: Set up credentials for wnba-pp-odds.py
+      env:
+        GOOGLE_SHEETS_CREDENTIALS_PP: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_PP }}
+      run: |
+        echo "$GOOGLE_SHEETS_CREDENTIALS_PP" > auth.json
+
+    - name: Run wnba-pp-odds scraper
+      run: python wnba-pp-odds.py
+
+    - name: Clean up wnba-pp-odds credentials
+      run: rm auth.json
+
+    # ---------- Error Check ----------
     - name: Check for errors in script output
       if: failure()
-      run: |
-        echo "Script failed. Check the log above for details."
