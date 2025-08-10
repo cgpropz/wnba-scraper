@@ -203,12 +203,7 @@ for url in urls:
         df.columns = cols
         print(f"Columns scraped: {cols}")
 
-        # Filter out non-data rows (e.g., headers or summaries)
-        df = df[df[cols[0]].str.contains('@', na=False)]
-        if df.empty:
-            print(f"No valid data rows after filtering on {url}")
-            debug_page_elements(driver, url, df)
-            continue
+        # NOTE: Removed the '@' filter here to keep both O and U rows
 
         prop = url.rstrip("/").split("/")[-1].replace("_over_under", "")
         df["prop"] = prop
@@ -256,36 +251,49 @@ else:
         driver.quit()
         exit()
 
-    # Split 'info' column and handle cases where split doesn't produce two columns
-    split1 = big_df['info'].str.split(' @ ', n=1, expand=True)
-    print("Debug: split1 columns:", split1.shape[1])
-    if split1.shape[1] == 2:
-        split1.columns = ['prefix', 'suffix']
-    else:
-        print("❌ Split did not produce expected columns, using fallback")
-        split1.columns = ['prefix'] if split1.shape[1] == 1 else ['prefix', 'suffix']
-        if split1.shape[1] == 1:
-            split1['suffix'] = ''  # Add empty suffix column if split fails
+    # New parsing logic for O and U rows
+    big_df['player'] = ''
+    big_df['away'] = ''
+    big_df['home'] = ''
+    big_df['O/U'] = ''  # Repurpose as 'O' or 'U'
+    big_df['line'] = ''
 
-    # Further split prefix and suffix
-    prefix_split = split1['prefix'].str.rsplit(' ', n=1, expand=True)
-    prefix_split.columns = ['player', 'away'] if prefix_split.shape[1] == 2 else ['player', '']
+    i = 0
+    while i < len(big_df):
+        info = big_df.at[i, 'info']
+        if ' @ ' in info:  # O row
+            split1 = info.split(' @ ', 1)
+            prefix = split1[0]
+            suffix = split1[1] if len(split1) > 1 else ''
+            prefix_split = prefix.rsplit(' ', 1)
+            player = prefix_split[0]
+            away = prefix_split[1] if len(prefix_split) > 1 else ''
+            suffix_split = suffix.rsplit(' ', 1)
+            home = suffix_split[0] if len(suffix_split) > 1 else suffix
+            line = suffix_split[1] if len(suffix_split) > 1 else ''
+            big_df.at[i, 'player'] = player
+            big_df.at[i, 'away'] = away
+            big_df.at[i, 'home'] = home
+            big_df.at[i, 'O/U'] = 'O'
+            big_df.at[i, 'line'] = line
 
-    suffix_split = split1['suffix'].str.rsplit(' ', n=2, expand=True)
-    suffix_split.columns = ['home', 'O/U', 'line'] if suffix_split.shape[1] == 3 else ['home', '', '']
+            # Check next row for U
+            if i + 1 < len(big_df) and big_df.at[i + 1, 'info'].startswith('U '):
+                u_info = big_df.at[i + 1, 'info']
+                u_line = u_info.split(' ', 1)[1] if ' ' in u_info else ''
+                big_df.at[i + 1, 'player'] = player
+                big_df.at[i + 1, 'away'] = away
+                big_df.at[i + 1, 'home'] = home
+                big_df.at[i + 1, 'O/U'] = 'U'
+                big_df.at[i + 1, 'line'] = u_line
+                i += 2  # Skip to next pair
+            else:
+                i += 1
+        else:
+            i += 1  # Skip non-standard rows
 
-    # Assign to big_df
-    big_df['player'] = prefix_split['player']
-    big_df['away'] = prefix_split['away']
-    big_df['home'] = suffix_split['home']
-    big_df['O/U'] = suffix_split['O/U']
-    big_df['line'] = suffix_split['line']
-    big_df = big_df.drop(columns=['info'] + ou_cols)
-
-    # Reorder columns
-    first_cols = ['player', 'prop', 'O/U', 'line', 'away', 'home']
-    remaining = [c for c in big_df.columns if c not in first_cols]
-    big_df = big_df[first_cols + remaining]
+    # Drop unparsed rows and clean
+    big_df = big_df[big_df['player'] != '']
     big_df = big_df.dropna(subset=["away"])
     big_df = big_df.fillna('x')
     big_df['player'] = big_df['player'].str.replace(r'^\d+\.\s*', '', regex=True).str.strip()
@@ -293,38 +301,43 @@ else:
     # Debug: Print final DataFrame
     print("Debug: Final big_df sample:\n", big_df.head())
 
+    # Reorder columns
+    first_cols = ['player', 'prop', 'O/U', 'line', 'away', 'home']
+    remaining = [c for c in big_df.columns if c not in first_cols]
+    big_df = big_df[first_cols + remaining]
+    big_df = big_df.drop(columns=['info'] + ou_cols)
+
     print("📊 Uploading to Google Sheets...")
-    print("📊 Uploading to Google Sheets...")
-try:
-    # Load credentials from environment variable
-    import json
-    import os
-    from io import StringIO
+    try:
+        # Load credentials from environment variable
+        import json
+        import os
+        from io import StringIO
 
-    credentials_json = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
-    with open('auth.json', 'w') as f:
-        f.write(credentials_json)
+        credentials_json = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
+        with open('auth.json', 'w') as f:
+            f.write(credentials_json)
 
-    # Authorize with the temporary auth.json
-    scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    credentials = ServiceAccountCredentials.from_json_keyfile_name("auth.json", scopes)
-    gs = gspread.authorize(credentials)
+        # Authorize with the temporary auth.json
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        credentials = ServiceAccountCredentials.from_json_keyfile_name("auth.json", scopes)
+        gs = gspread.authorize(credentials)
 
-    # Open the spreadsheet and worksheet
-    sheet = gs.open_by_url("https://docs.google.com/spreadsheets/d/14sXJ4m6x6Dtl1vh4QsHv1SOpvlLQCG0lNRj7RaEvdSg")
-    ws = sheet.worksheet("Sports_Data")
+        # Open the spreadsheet and worksheet
+        sheet = gs.open_by_url("https://docs.google.com/spreadsheets/d/14sXJ4m6x6Dtl1vh4QsHv1SOpvlLQCG0lNRj7RaEvdSg")
+        ws = sheet.worksheet("Sports_Data")
 
-    # Clear and upload data
-    ws.clear()
-    ws.append_row(big_df.columns.tolist())
-    ws.append_rows(big_df.values.tolist())
-    print(f"✅ Uploaded {len(big_df)} rows to Google Sheets")
+        # Clear and upload data
+        ws.clear()
+        ws.append_row(big_df.columns.tolist())
+        ws.append_rows(big_df.values.tolist())
+        print(f"✅ Uploaded {len(big_df)} rows to Google Sheets")
 
-    # Clean up the temporary auth.json file
-    os.remove('auth.json')
+        # Clean up the temporary auth.json file
+        os.remove('auth.json')
 
-except Exception as e:
-    print(f"❌ Failed to upload to Google Sheets: {type(e).__name__} - {e}")
+    except Exception as e:
+        print(f"❌ Failed to upload to Google Sheets: {type(e).__name__} - {e}")
 
 # Cleanup
 print("🧹 Cleaning up...")
@@ -335,4 +348,3 @@ except Exception as e:
     print(f"Warning: Driver close failed: {e}")
 
 print("🎉 Scraping complete!")
-
