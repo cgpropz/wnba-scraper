@@ -138,6 +138,18 @@ for url in urls:
     table_found = False
     table_selector = None
 
+    # Extract matchup from the page
+    try:
+        matchup_element = wait.until(EC.presence_of_element_located((By.XPATH, "//p[contains(@class, 'text-xs text-gray-600') and contains(text(), '@')]")))
+        matchup = matchup_element.text.strip()
+        print(f"✓ Matchup extracted: {matchup}")
+    except TimeoutException:
+        print("⚠️ No matchup element found, using default 'x @ x'")
+        matchup = "x @ x"
+
+    # Split matchup into away and home
+    away, home = matchup.split(' @ ') if ' @ ' in matchup else ('x', 'x')
+
     for selector in table_selectors:
         try:
             long_wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
@@ -203,8 +215,6 @@ for url in urls:
         df.columns = cols
         print(f"Columns scraped: {cols}")
 
-        # NOTE: Removed the '@' filter here to keep both O and U rows
-
         prop = url.rstrip("/").split("/")[-1].replace("_over_under", "")
         df["prop"] = prop
         dfs.append(df)
@@ -251,7 +261,7 @@ else:
         driver.quit()
         exit()
 
-    # New parsing logic for O and U rows
+    # New parsing logic for O and U rows with pre-extracted matchup
     big_df['player'] = ''
     big_df['away'] = ''
     big_df['home'] = ''
@@ -261,36 +271,29 @@ else:
     i = 0
     while i < len(big_df):
         info = big_df.at[i, 'info']
-        if ' @ ' in info:  # O row
+        if ' @ ' in info:  # O row (legacy handling, fallback)
             split1 = info.split(' @ ', 1)
             prefix = split1[0]
             suffix = split1[1] if len(split1) > 1 else ''
             prefix_split = prefix.rsplit(' ', 1)
             player = prefix_split[0]
-            away = prefix_split[1] if len(prefix_split) > 1 else ''
+            away = prefix_split[1] if len(prefix_split) > 1 else away  # Use pre-extracted
             suffix_split = suffix.rsplit(' ', 1)
-            home = suffix_split[0] if len(suffix_split) > 1 else suffix
+            home = suffix_split[0] if len(suffix_split) > 1 else home  # Use pre-extracted
             line = suffix_split[1] if len(suffix_split) > 1 else ''
             big_df.at[i, 'player'] = player
             big_df.at[i, 'away'] = away
             big_df.at[i, 'home'] = home
             big_df.at[i, 'O/U'] = 'O'
             big_df.at[i, 'line'] = line
-
-            # Check next row for U
-            if i + 1 < len(big_df) and big_df.at[i + 1, 'info'].startswith('U '):
-                u_info = big_df.at[i + 1, 'info']
-                u_line = u_info.split(' ', 1)[1] if ' ' in u_info else ''
-                big_df.at[i + 1, 'player'] = player
-                big_df.at[i + 1, 'away'] = away
-                big_df.at[i + 1, 'home'] = home
-                big_df.at[i + 1, 'O/U'] = 'U'
-                big_df.at[i + 1, 'line'] = u_line
-                i += 2  # Skip to next pair
-            else:
-                i += 1
-        else:
-            i += 1  # Skip non-standard rows
+        elif info.startswith('U '):  # U row
+            u_line = info.split(' ', 1)[1] if ' ' in info else ''
+            big_df.at[i, 'player'] = big_df.at[i-1, 'player'] if i > 0 else ''
+            big_df.at[i, 'away'] = away  # Use pre-extracted
+            big_df.at[i, 'home'] = home  # Use pre-extracted
+            big_df.at[i, 'O/U'] = 'U'
+            big_df.at[i, 'line'] = u_line
+        i += 1
 
     # Drop unparsed rows and clean
     big_df = big_df[big_df['player'] != '']
