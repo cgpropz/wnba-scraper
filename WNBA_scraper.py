@@ -312,17 +312,20 @@ else:
 
     print("📊 Uploading to Google Sheets...")
     try:
-        # Load credentials from environment variable or prompt if missing
+        # Load credentials from environment variable or local file
         import json
         import os
         from io import StringIO
 
         credentials_json = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
         if not credentials_json:
-            print("⚠️ GOOGLE_SHEETS_CREDENTIALS environment variable not found. Please paste your JSON credentials:")
-            credentials_json = input("Enter JSON string: ")
-            if not credentials_json:
-                raise ValueError("No credentials provided, upload aborted.")
+            print("⚠️ GOOGLE_SHEETS_CREDENTIALS environment variable not found. Looking for local credentials.json...")
+            try:
+                with open('credentials.json', 'r') as f:
+                    credentials_json = f.read()
+            except FileNotFoundError:
+                print("❌ No credentials.json found. Please create one with your Google API JSON key and try again.")
+                raise
 
         with open('auth.json', 'w') as f:
             f.write(credentials_json)
