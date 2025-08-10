@@ -312,25 +312,7 @@ else:
 
     print("📊 Uploading to Google Sheets...")
     try:
-        # Load credentials from environment variable or local file
-        import json
-        import os
-        from io import StringIO
-
-        credentials_json = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
-        if not credentials_json:
-            print("⚠️ GOOGLE_SHEETS_CREDENTIALS environment variable not found. Looking for local credentials.json...")
-            try:
-                with open('credentials.json', 'r') as f:
-                    credentials_json = f.read()
-            except FileNotFoundError:
-                print("❌ No credentials.json found. Please create one with your Google API JSON key and try again.")
-                raise
-
-        with open('auth.json', 'w') as f:
-            f.write(credentials_json)
-
-        # Authorize with the temporary auth.json
+        # Use existing auth.json file directly
         scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         credentials = ServiceAccountCredentials.from_json_keyfile_name("auth.json", scopes)
         gs = gspread.authorize(credentials)
@@ -344,9 +326,6 @@ else:
         ws.append_row(big_df.columns.tolist())
         ws.append_rows(big_df.values.tolist())
         print(f"✅ Uploaded {len(big_df)} rows to Google Sheets")
-
-        # Clean up the temporary auth.json file
-        os.remove('auth.json')
 
     except Exception as e:
         print(f"❌ Failed to upload to Google Sheets: {type(e).__name__} - {e}")
